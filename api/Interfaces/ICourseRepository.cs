@@ -9,6 +9,7 @@ namespace api.Repositories
     public interface ICourseRepository
     {
         public Task<List<Course>> GetAllAsync();
+        public Task<Course?> GetByName(string name);
         public Task<Course?> CreateAsync(Course course);
     }
 }

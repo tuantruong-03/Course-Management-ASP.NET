@@ -10,5 +10,7 @@ namespace api.Repositories
     {
         public Task<List<User>> GetAllAsync();
         public Task<User?> CreateAsync(User user);
+
+        public Task<User> GetByUserName(string userName);
     }
 }

@@ -11,7 +11,7 @@ namespace api.Models
     {
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
-        public string? Name { get; set; }
+        public string Name { get; set; }
         public int MaxNumberOfStudents { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime ModifiedAt { get; set; }

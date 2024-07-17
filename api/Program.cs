@@ -1,4 +1,6 @@
 using api.Data;
+using api.Extensions;
+using api.Filters;
 using api.Models;
 using api.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -14,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Config manually
+// <Config manually>
 builder.Services.AddControllers().AddNewtonsoftJson(options =>
 {
     // Prevent object cycle
@@ -22,7 +24,8 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 });
 
 // Connect toDB
-builder.Services.AddDbContext<ApplicationDBContext>(options => {
+builder.Services.AddDbContext<ApplicationDBContext>(options =>
+{
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 builder.Services.AddIdentity<User, IdentityRole>(options =>
@@ -60,12 +63,18 @@ builder.Services.AddAuthentication(options =>
 // DI
 builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+// Filter
 
 
-
-// Config manually
+// </Config manually>
 
 var app = builder.Build();
+
+// <Config manually>
+app.MapControllers();
+// </Config manually>
+
+
 
 
 // Configure the HTTP request pipeline.
@@ -74,15 +83,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseGlobalExceptionHandler();
 app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthorization(); 
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
 
 
 
