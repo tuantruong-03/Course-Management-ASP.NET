@@ -28,11 +28,14 @@ namespace api.Data
             .HasOne(coureUser => coureUser.Course)
             .WithMany(course => course.CourseUser)
             .HasForeignKey(courseUser => courseUser.CourseId);
+            // Automatically delete on cascade (remove a course, it will remove a courseUser associated with that course)
 
             builder.Entity<CourseUser>()
             .HasOne(courseUser => courseUser.User)
             .WithMany(user => user.CourseUser)
             .HasForeignKey(courseUser => courseUser.UserId);
+            // Automatically delete on cascade (remove a user, it will remove a courseUser associated with that user)
+
 
             builder.Entity<Score>()
             .HasOne(score => score.User)

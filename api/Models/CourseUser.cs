@@ -12,8 +12,8 @@ namespace api.Models
     public class CourseUser
     {
         public int CourseId { get; set; }
-        public string? UserId { get; set; }
-        public Course Course { get; set; } 
+        public string UserId { get; set; } = string.Empty;
+        public Course Course { get; set; }
         public User User { get; set; }
     }
 }

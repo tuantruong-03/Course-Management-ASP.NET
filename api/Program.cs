@@ -1,6 +1,7 @@
 using api.Data;
 using api.Extensions;
 using api.Filters;
+using api.Interfaces;
 using api.Models;
 using api.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -63,6 +64,7 @@ builder.Services.AddAuthentication(options =>
 // DI
 builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IScoreRepository, ScoreRepository>();
 // Filter
 
 

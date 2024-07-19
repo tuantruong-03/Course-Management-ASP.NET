@@ -43,5 +43,35 @@ namespace api.Repositories
             }
             return existingUser;
         }
+
+        public async Task<List<Course>> GetCoursesOfUser(string userName)
+        {
+            User? existingUser = await userManager.Users.Include(user => user.CourseUser)
+            .ThenInclude(courseUser => courseUser.Course).FirstOrDefaultAsync(u => u.UserName.Equals(userName));
+            if (existingUser == null)
+            {
+                throw new AppException($"User not found with {userName}", (int)HttpStatusCode.NotFound);
+            }
+            List<Course> courses = existingUser.CourseUser.Select(courseUser => courseUser.Course).ToList();
+            return courses;
+        }
+
+        public async Task<List<string>> GetRoles(User user)
+        {
+            var roles = await userManager.GetRolesAsync(user);
+            return roles.ToList();
+        }
+
+        public async Task<List<Score>> GetScoresOfUserAsync(string userName)
+        {
+            var user = await userManager.Users
+                .Include(user => user.Scores)
+                    .ThenInclude(score => score.Course)
+            .FirstOrDefaultAsync(user => user.UserName.ToLower().Equals(userName.ToLower()));
+            if (user == null) {
+                throw new AppException($"User not found with {userName}", (int)HttpStatusCode.NotFound);
+            }
+            return user.Scores;
+        }
     }
 }
