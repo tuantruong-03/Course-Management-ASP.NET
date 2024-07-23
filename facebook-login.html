@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Facebook Login</title>
+    <script async defer src="https://connect.facebook.net/en_US/sdk.js"></script>
+    <script>
+        window.fbAsyncInit = function() {
+            FB.init({
+                appId: '2191258367906419',
+                cookie: true,
+                xfbml: true,
+                version: 'v20.0'
+            });
+
+            // Check login status
+            FB.getLoginStatus(function(response) {
+                if (response.status === 'connected') {
+                    // Logged into your app and Facebook.
+                    console.log('Logged in:', response);
+                } else {
+                    // Not logged in or unable to determine.
+                    console.log('Not logged in:', response);
+                }
+            });
+        };
+
+        (function(d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) {return;}
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/en_US/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
+    </script>
+</head>
+<body>
+    <div id="fb-root"></div>
+    <fb:login-button 
+        scope="public_profile,email" 
+        onlogin="checkLoginState();">
+    </fb:login-button>
+
+    <script>
+        function checkLoginState() {
+            FB.getLoginStatus(function(response) {
+                if (response.status === 'connected') {
+                    // User is logged in and authenticated
+                    console.log('Login successful:', response);
+                } else {
+                    // User is not authenticated
+                    console.log('Login failed:', response);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

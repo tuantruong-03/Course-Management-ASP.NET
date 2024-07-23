@@ -7,11 +7,14 @@ using api.Filters;
 using api.Interfaces;
 using api.Mappers;
 using api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace api.Controllers
 {
     [Route("api/v1/scores")]
+    [Authorize]
+
     public class ScoreController : ControllerBase
     {
         private readonly IScoreRepository scoreRepository;
@@ -28,7 +31,7 @@ namespace api.Controllers
         }
 
         [ValidateModelState]
-        [HttpPost]
+        [HttpPut]
         public async Task<IActionResult> CreateOrUpdate([FromBody] ScoreRequest scoreRequest) {
             Score score = await scoreRepository.CreateOrUpdateAsync(scoreRequest);
             return Ok(score.ToResponseFromModel());

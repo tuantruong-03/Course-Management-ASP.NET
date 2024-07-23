@@ -82,12 +82,14 @@ namespace api.Helpers
             User admin = new User
             {
                 UserName = "admin123",
-                Email = "admin123@gmai.com",
+                Email = "admin123@gmail.com",
                 FirstName = "Tuan",
                 LastName = "Truong",
+                Provider = Provider.Local,
                 CreatedAt = DateTime.UtcNow,
                 ModifiedAt = DateTime.UtcNow
             };
+            admin.PasswordHash = hasher.HashPassword(admin, "P@ss123");
             modelBuilder.Entity<User>().HasData(admin);
             modelBuilder.Entity<IdentityUserRole<string>>().HasData(new IdentityUserRole<string> { UserId = admin.Id, RoleId = "0" });
 
@@ -101,13 +103,12 @@ namespace api.Helpers
                     Email = emails[i],
                     FirstName = firstNames[i],
                     LastName = lastNames[i],
+                    Provider = Provider.Local,
                     CreatedAt = DateTime.UtcNow,
                     ModifiedAt = DateTime.UtcNow
                 };
                 string roleId = user.Email.Contains("student") ? "1" : "2"; // Student or Teacher
-                // Hash default password using BCrypt
-                string hashedPassword = BCrypt.Net.BCrypt.HashPassword("Default_123");
-                user.PasswordHash = hasher.HashPassword(user, hashedPassword);
+                user.PasswordHash = hasher.HashPassword(user, "P@ss123");
                 modelBuilder.Entity<User>().HasData(user);
                 // Assign Student role to the user
                 modelBuilder.Entity<IdentityUserRole<string>>().HasData(new IdentityUserRole<string> { UserId = user.Id, RoleId = roleId });

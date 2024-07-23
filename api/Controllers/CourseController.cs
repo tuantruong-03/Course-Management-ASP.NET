@@ -7,6 +7,7 @@ using api.Filters;
 using api.Mappers;
 using api.Models;
 using api.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,7 @@ namespace api.Controllers
 {
     [Route("api/v1/courses")]
     [ApiController]
+    [Authorize]
     public class CourseController : ControllerBase
     {
          private readonly ICourseRepository courseRepository;
