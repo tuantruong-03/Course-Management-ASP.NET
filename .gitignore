@@ -1,2 +1,5 @@
 api/Migrations
 api/appsettings.json
+facebook-login.html
+google-login.html
+api/bin/Debug/net8.0/appsettings.json
