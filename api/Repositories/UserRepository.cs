@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Reflection.Metadata.Ecma335;
 using System.Threading.Tasks;
 using api.Data;
 using api.DTOs.Requests;
@@ -12,19 +13,21 @@ using api.Models;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
 
 namespace api.Repositories
 {
     public class UserRepository : IUserRepository
     {
         private readonly JwtUtil jwtUtill;
+        private readonly ApplicationDBContext _context;
         private readonly UserManager<User> userManager;
         private readonly SignInManager<User> signInManager;
         private readonly RoleManager<IdentityRole> roleManager;
         private readonly GoogleTokenValidator googleTokenValidator;
         private readonly FacebookTokenValidator facebookTokenValidator;
         public UserRepository(UserManager<User> userManager, SignInManager<User> signInManager,
-RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator googleTokenValidator, FacebookTokenValidator facebookTokenValidator)
+RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator googleTokenValidator, FacebookTokenValidator facebookTokenValidator, ApplicationDBContext _context)
         {
             this.userManager = userManager;
             this.signInManager = signInManager;
@@ -32,6 +35,7 @@ RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator go
             this.jwtUtill = jwtUtill;
             this.googleTokenValidator = googleTokenValidator;
             this.facebookTokenValidator = facebookTokenValidator;
+            this._context = _context;
         }
         public async Task<User?> CreateAsync(User user)
         {
@@ -218,6 +222,90 @@ RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator go
             }
             await userManager.AddToRoleAsync(user, "Student");
             return user;
+        }
+
+        public async Task<byte[]> ExportUsersToExcelAsync()
+        {
+            List<User> users = await userManager.Users.ToListAsync();
+
+            ExcelPackage excelPackage = new ExcelPackage();
+            var worksheet = excelPackage.Workbook.Worksheets.Add("Users");
+            worksheet.Cells[1, 1].Value = "ID";
+            worksheet.Cells[1, 2].Value = "UserName";
+            worksheet.Cells[1, 3].Value = "Email";
+            worksheet.Cells[1, 4].Value = "First Name";
+            worksheet.Cells[1, 5].Value = "Last Name";
+            worksheet.Cells[1, 6].Value = "Roles";
+            for (int i = 0; i < users.Count; i++)
+            {
+                var roles = await userManager.GetRolesAsync(users[i]);
+                worksheet.Cells[i + 2, 1].Value = users[i].Id;
+                worksheet.Cells[i + 2, 2].Value = users[i].UserName;
+                worksheet.Cells[i + 2, 3].Value = users[i].Email;
+                worksheet.Cells[i + 2, 4].Value = users[i].FirstName;
+                worksheet.Cells[i + 2, 5].Value = users[i].LastName;
+                worksheet.Cells[i + 2, 6].Value = roles;
+            }
+            return await excelPackage.GetAsByteArrayAsync();
+        }
+
+        public async Task<List<User>> ImportUsersFromExcelAsync(IFormFile file)
+        {
+            var transaction = await _context.Database.BeginTransactionAsync();
+            MemoryStream memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            ExcelPackage excelPackage = new ExcelPackage(memoryStream);
+            ExcelWorksheet worksheet = excelPackage.Workbook.Worksheets.First();
+            int row = worksheet.Dimension.Rows;
+            System.Console.WriteLine("row " + row);
+            List<User> users = new List<User>();
+            for (int i = 2; i <= row; ++i)
+            {
+                string? username = worksheet.Cells[i, 1].Value?.ToString();
+                string? email = worksheet.Cells[i, 2].Value?.ToString();
+                // Conflict with username or email
+                if (await userManager.Users.AnyAsync(user => user.UserName.ToLower().Equals(username.ToLower()))) continue;
+                if (await userManager.Users.AnyAsync(user => user.Email.ToLower().Equals(email.ToLower()))) continue;
+                //
+                User user = new User
+                {
+                    UserName = username,
+                    Email = email,
+                    FirstName = worksheet.Cells[i, 3].Value?.ToString().Trim(),
+                    LastName = worksheet.Cells[i, 4].Value?.ToString().Trim(),
+                    Provider = Provider.Local, // Assuming local provider for new users
+                    CreatedAt = DateTime.UtcNow,
+                    ModifiedAt = DateTime.UtcNow
+                };
+                System.Console.WriteLine("user " + user.ToString());
+                string? role = worksheet.Cells[i, 5].Value?.ToString().Trim();
+                if (!await roleManager.RoleExistsAsync(role))
+                {
+                    // Rollback transaction and return bad request
+                    await transaction.RollbackAsync();
+                    throw new AppException($"Role '{role}' does not exist.", (int)HttpStatusCode.BadRequest);
+                }
+
+                var createUserResult = await userManager.CreateAsync(user, "P@ss123");
+                if (!createUserResult.Succeeded)
+                {
+                    await transaction.RollbackAsync();
+                    throw new AppException(string.Join(", ", createUserResult.Errors.Select(e => e.Description)), (int)HttpStatusCode.BadRequest);
+                }
+
+                var addToRoleResult = await userManager.AddToRoleAsync(user, role);
+                if (!addToRoleResult.Succeeded)
+                {
+                    await transaction.RollbackAsync();
+                    throw new AppException(string.Join(", ", addToRoleResult.Errors.Select(e => e.Description)), (int)HttpStatusCode.BadRequest);
+                }
+                System.Console.WriteLine("user " + user.ToString());
+                users.Add(user);
+            }
+            // Commit transaction if all operations succeed
+            await transaction.CommitAsync();
+            return users;
+
         }
     }
 }

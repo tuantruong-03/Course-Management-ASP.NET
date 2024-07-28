@@ -22,7 +22,6 @@ namespace api.Helpers
             Audience = new[] { _clientId }
         };
         var payload = await GoogleJsonWebSignature.ValidateAsync(token, settings);
-        System.Console.WriteLine(payload.ToString());
         return payload;
     }
 }

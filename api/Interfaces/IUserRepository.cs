@@ -21,5 +21,8 @@ namespace api.Repositories
         public Task<List<string>> GetRoles(User user);
         public Task<LoginResponse> GoogleLoginAsync(GoogleLoginRequest request);
         public Task<LoginResponse> FacebookLoginAsync(FacebookLoginRequest request);
+
+        public Task<byte[]> ExportUsersToExcelAsync();
+        public Task<List<User>> ImportUsersFromExcelAsync(IFormFile file);
     }
 }
