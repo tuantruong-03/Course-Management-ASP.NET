@@ -1,6 +1,6 @@
-# User Management System
+# Course Management System
 
-This project is a User Management System built with ASP.NET Core, featuring functionalities for importing users from an Excel file, as well as Google and Facebook login integration.
+This project is a Course Management System built with ASP.NET Core, featuring functionalities for importing users from an Excel file, as well as Google and Facebook login integration.
 
 ## Features
 
