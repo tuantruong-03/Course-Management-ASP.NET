@@ -19,5 +19,8 @@ namespace api.Repositories
         public Task<List<Score>?> GetScoresOfCourseAsync(string name);
         public Task<CourseUser> AddUserToCourseAsync(CourseUserCreateRequest courseUserCreateRequest);
         public Task RemoveUserFromCourseAsync(CourseUserDeleteRequest courseUserDeleteRequest);
+        public Task<byte[]> ExportScoresToExcelAsync(string courseName);
+
+        public Task<List<Score>> ImportScoresFromExcelAsync(string courseName, IFormFile file);
     }
 }

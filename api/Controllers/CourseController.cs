@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using api.DTOs.Requests;
 using api.Filters;
+using api.Helpers;
 using api.Mappers;
 using api.Models;
 using api.Repositories;
@@ -102,6 +103,29 @@ namespace api.Controllers
         public async Task<IActionResult> GetScoresOfCourses([FromRoute] string name) {
             var scores = await courseRepository.GetScoresOfCourseAsync(name);
             return Ok(scores.Select(score => score.ToResponseFromModel()));
+        }
+        [HttpPost]
+        [Route("{name}/scores/import-from-excel")]
+        [ValidateExcelFile("file")]
+         public async Task<IActionResult> ImportFromExcel([FromRoute] string name, IFormFile file) {
+            string extension = Path.GetExtension(file.FileName).ToLower();
+            // Read the header and validate it
+            var isHeaderValid = await ExcelValidator.ValidateScoresFile(file, extension);
+            if (!isHeaderValid)
+            {
+                return BadRequest("Invalid file header. The file must contain 'UserName', 'Value' columns.");
+            }
+            List<Score> scores = await courseRepository.ImportScoresFromExcelAsync(name, file);
+
+            return Ok(scores.Select(score => score.ToResponseFromModel()));
+        }
+        [HttpPost]
+        [Route("{name}/scores/export-to-excel")]
+         public async Task<IActionResult> ExportToExcel([FromRoute] string name) {
+            byte[] excelData = await courseRepository.ExportScoresToExcelAsync(name);
+            var fileName = $"{name}.xlsx";
+            var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            return File(excelData, contentType, fileDownloadName: fileName);
         }
     }
 }

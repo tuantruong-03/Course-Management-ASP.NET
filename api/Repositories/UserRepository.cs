@@ -27,7 +27,7 @@ namespace api.Repositories
         private readonly GoogleTokenValidator googleTokenValidator;
         private readonly FacebookTokenValidator facebookTokenValidator;
         public UserRepository(UserManager<User> userManager, SignInManager<User> signInManager,
-RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator googleTokenValidator, FacebookTokenValidator facebookTokenValidator, ApplicationDBContext _context)
+RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator googleTokenValidator, FacebookTokenValidator facebookTokenValidator, ApplicationDBContext context)
         {
             this.userManager = userManager;
             this.signInManager = signInManager;
@@ -35,7 +35,7 @@ RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator go
             this.jwtUtill = jwtUtill;
             this.googleTokenValidator = googleTokenValidator;
             this.facebookTokenValidator = facebookTokenValidator;
-            this._context = _context;
+            this._context = context;
         }
         public async Task<User?> CreateAsync(User user)
         {
@@ -251,60 +251,73 @@ RoleManager<IdentityRole> roleManager, JwtUtil jwtUtill, GoogleTokenValidator go
 
         public async Task<List<User>> ImportUsersFromExcelAsync(IFormFile file)
         {
-            var transaction = await _context.Database.BeginTransactionAsync();
-            MemoryStream memoryStream = new MemoryStream();
-            await file.CopyToAsync(memoryStream);
-            ExcelPackage excelPackage = new ExcelPackage(memoryStream);
-            ExcelWorksheet worksheet = excelPackage.Workbook.Worksheets.First();
-            int row = worksheet.Dimension.Rows;
-            System.Console.WriteLine("row " + row);
-            List<User> users = new List<User>();
-            for (int i = 2; i <= row; ++i)
+            try
             {
-                string? username = worksheet.Cells[i, 1].Value?.ToString();
-                string? email = worksheet.Cells[i, 2].Value?.ToString();
-                // Conflict with username or email
-                if (await userManager.Users.AnyAsync(user => user.UserName.ToLower().Equals(username.ToLower()))) continue;
-                if (await userManager.Users.AnyAsync(user => user.Email.ToLower().Equals(email.ToLower()))) continue;
-                //
-                User user = new User
-                {
-                    UserName = username,
-                    Email = email,
-                    FirstName = worksheet.Cells[i, 3].Value?.ToString().Trim(),
-                    LastName = worksheet.Cells[i, 4].Value?.ToString().Trim(),
-                    Provider = Provider.Local, // Assuming local provider for new users
-                    CreatedAt = DateTime.UtcNow,
-                    ModifiedAt = DateTime.UtcNow
-                };
-                System.Console.WriteLine("user " + user.ToString());
-                string? role = worksheet.Cells[i, 5].Value?.ToString().Trim();
-                if (!await roleManager.RoleExistsAsync(role))
-                {
-                    // Rollback transaction and return bad request
-                    await transaction.RollbackAsync();
-                    throw new AppException($"Role '{role}' does not exist.", (int)HttpStatusCode.BadRequest);
-                }
 
-                var createUserResult = await userManager.CreateAsync(user, "P@ss123");
-                if (!createUserResult.Succeeded)
+                var transaction = await _context.Database.BeginTransactionAsync();
+                MemoryStream memoryStream = new MemoryStream();
+                await file.CopyToAsync(memoryStream);
+                ExcelPackage excelPackage = new ExcelPackage(memoryStream);
+                ExcelWorksheet? worksheet = excelPackage.Workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null)
                 {
-                    await transaction.RollbackAsync();
-                    throw new AppException(string.Join(", ", createUserResult.Errors.Select(e => e.Description)), (int)HttpStatusCode.BadRequest);
+                    throw new AppException("No worksheet found in the uploaded Excel file.", (int)HttpStatusCode.BadRequest);
                 }
+                int row = worksheet.Dimension.Rows;
+                List<User> users = new List<User>();
+                for (int i = 2; i <= row; ++i)
+                {
+                    string? username = worksheet.Cells[i, 1].Value?.ToString();
+                    string? email = worksheet.Cells[i, 2].Value?.ToString();
+                    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(email))
+                    {
+                        continue; // Skip rows with empty username or email
+                    }
+                    // Conflict with username or email
+                    if (await userManager.Users.AnyAsync(user => user.UserName.ToLower().Equals(username.ToLower()))) continue;
+                    if (await userManager.Users.AnyAsync(user => user.Email.ToLower().Equals(email.ToLower()))) continue;
+                    //
+                    User user = new User
+                    {
+                        UserName = username,
+                        Email = email,
+                        FirstName = worksheet.Cells[i, 3].Value?.ToString().Trim(),
+                        LastName = worksheet.Cells[i, 4].Value?.ToString().Trim(),
+                        Provider = Provider.Local, // Assuming local provider for new users
+                        CreatedAt = DateTime.UtcNow,
+                        ModifiedAt = DateTime.UtcNow
+                    };
+                    string? role = worksheet.Cells[i, 5].Value?.ToString().Trim();
+                    if (role == null || !await roleManager.RoleExistsAsync(role))
+                    {
+                        // Rollback transaction and return bad request
+                        await transaction.RollbackAsync();
+                        throw new AppException($"Role '{role}' does not exist.", (int)HttpStatusCode.BadRequest);
+                    }
 
-                var addToRoleResult = await userManager.AddToRoleAsync(user, role);
-                if (!addToRoleResult.Succeeded)
-                {
-                    await transaction.RollbackAsync();
-                    throw new AppException(string.Join(", ", addToRoleResult.Errors.Select(e => e.Description)), (int)HttpStatusCode.BadRequest);
+                    var createUserResult = await userManager.CreateAsync(user, "P@ss123");
+                    if (!createUserResult.Succeeded)
+                    {
+                        await transaction.RollbackAsync();
+                        throw new AppException(string.Join(", ", createUserResult.Errors.Select(e => e.Description)), (int)HttpStatusCode.BadRequest);
+                    }
+
+                    var addToRoleResult = await userManager.AddToRoleAsync(user, role);
+                    if (!addToRoleResult.Succeeded)
+                    {
+                        await transaction.RollbackAsync();
+                        throw new AppException(string.Join(", ", addToRoleResult.Errors.Select(e => e.Description)), (int)HttpStatusCode.BadRequest);
+                    }
+                    users.Add(user);
                 }
-                System.Console.WriteLine("user " + user.ToString());
-                users.Add(user);
+                // Commit transaction if all operations succeed
+                await transaction.CommitAsync();
+                return users;
             }
-            // Commit transaction if all operations succeed
-            await transaction.CommitAsync();
-            return users;
+            catch (Exception e)
+            {
+                throw new AppException(e.InnerException?.Message ?? e.Message, (int)HttpStatusCode.InternalServerError);
+            }
 
         }
     }

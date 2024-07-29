@@ -14,6 +14,7 @@ namespace api.Controllers
 {
     [Route("api/v1/scores")]
     [Authorize]
+    [ApiController]
 
     public class ScoreController : ControllerBase
     {

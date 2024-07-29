@@ -49,6 +49,13 @@ builder.Services.AddSwaggerGen(option =>
 
 // <Config manually>
 
+// Turn off "Display SQL query"
+// Clear all default logging providers
+// builder.Logging.ClearProviders();
+// builder.Logging.AddFilter((category, level) =>
+//     !(category == DbLoggerCategory.Database.Command.Name && level == LogLevel.Information));
+
+
 // Add cors
 builder.Services.AddCors(options =>
     {

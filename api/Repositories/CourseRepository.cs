@@ -10,6 +10,7 @@ using api.Mappers;
 using api.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
 
 namespace api.Repositories
 {
@@ -176,6 +177,99 @@ namespace api.Repositories
             }
             var scores = course.Scores;
             return scores;
+        }
+
+        public async Task<List<Score>> ImportScoresFromExcelAsync(string courseName, IFormFile file)
+        {
+            Course? existingCourse = await _context.Courses.FirstOrDefaultAsync(course => course.Name.Equals(courseName));
+            if (existingCourse == null)
+            {
+                throw new AppException($"Course not found with '{courseName}'", (int)HttpStatusCode.NotFound);
+            }
+            try
+            {
+                var transaction = await _context.Database.BeginTransactionAsync();
+                MemoryStream memoryStream = new MemoryStream();
+                await file.CopyToAsync(memoryStream);
+                ExcelPackage excelPackage = new ExcelPackage(memoryStream);
+                ExcelWorksheet? worksheet = excelPackage.Workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null)
+                {
+                    throw new AppException("No worksheet found in the uploaded Excel file.", (int)HttpStatusCode.BadRequest);
+                }
+                int row = worksheet.Dimension.Rows;
+                List<Score> scores = new List<Score>();
+                for (int i = 2; i <= row; ++i)
+                {
+                    string? username = worksheet.Cells[i, 1].Value?.ToString();
+                    string? valueString = worksheet.Cells[i, 2].Value?.ToString();
+                    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(valueString))
+                    {
+                        continue; // Skip rows with empty username or email
+                    }
+                    bool isValidValue = int.TryParse(valueString, out int value);
+                    if (!isValidValue || value < 0 || value > 10)
+                    {
+                        System.Console.WriteLine("Invalid score");
+                        continue;
+                    }
+
+                    User? existingUser = await userManager.Users.FirstOrDefaultAsync(user => user.UserName.Equals(username));
+                    if (existingUser == null)
+                    {
+                        await transaction.RollbackAsync();
+                        throw new AppException($"User not found with '{username}'", (int)HttpStatusCode.NotFound);
+                    }
+                    Score? existingScore = await _context.Scores.FirstOrDefaultAsync(score => score.UserId.Equals(existingUser.Id) && score.CourseId.Equals(existingCourse.Id));
+                    if (existingScore != null)
+                    {
+                        // Score is existed, updaate value of score
+                        existingScore.Value = value;
+                        await _context.SaveChangesAsync();
+                        scores.Add(existingScore);
+                    }
+                    else
+                    {
+                        Score score = new Score
+                        {
+                            Course = existingCourse,
+                            User = existingUser,
+                            UserId = existingUser.Id,
+                            CourseId = existingCourse.Id,
+                            Value = value
+                        };
+                        await _context.Scores.AddAsync(score);
+                        await _context.SaveChangesAsync();
+                        scores.Add(score);
+                    }
+
+                }
+                await transaction.CommitAsync();
+                return scores;
+
+            }
+            catch (Exception e)
+            {
+                throw new AppException(e.InnerException?.Message ?? e.Message, (int)HttpStatusCode.InternalServerError);
+            }
+
+        }
+
+        public async Task<byte[]> ExportScoresToExcelAsync(string courseName)
+        {
+            List<Score> scores = await _context.Scores
+                .Include(score => score.Course)
+                .Include(score => score.User)
+                .Where(score => score.Course.Name.Equals(courseName)).ToListAsync();
+            ExcelPackage excelPackage = new ExcelPackage();
+            var worksheet = excelPackage.Workbook.Worksheets.Add("Scores");
+            worksheet.Cells[1, 1].Value = "UserName";
+            worksheet.Cells[1, 2].Value = "Value";
+            for (int i = 0; i < scores.Count; ++i) {
+                worksheet.Cells[i+2,1].Value = scores[i].User.UserName;
+                worksheet.Cells[i+2,2].Value = scores[i].Value;
+            }
+            return await excelPackage.GetAsByteArrayAsync();
         }
     }
 }

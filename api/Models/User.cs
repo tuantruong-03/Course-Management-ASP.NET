@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
+using Newtonsoft.Json;
 
 namespace api.Models
 {
@@ -13,6 +14,7 @@ namespace api.Models
         ,Facebook // 2
     }
     [Table("Users")]
+
     public class User : IdentityUser
     {
         public string FirstName { get; set; } = string.Empty;
@@ -24,5 +26,12 @@ namespace api.Models
         // Many to many
         public List<CourseUser> CourseUser { get; set; } = [];
         public List<Score> Scores { get; set; } = [];
+
+        public override string ToString()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
+
+
     }
 }
