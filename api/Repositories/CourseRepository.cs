@@ -181,14 +181,13 @@ namespace api.Repositories
 
         public async Task<List<Score>> ImportScoresFromExcelAsync(string courseName, IFormFile file)
         {
-            Course? existingCourse = await _context.Courses.FirstOrDefaultAsync(course => course.Name.Equals(courseName));
+            Course? existingCourse = await _context.Courses.Include(course => course.CourseUser).FirstOrDefaultAsync(course => course.Name.Equals(courseName));
             if (existingCourse == null)
             {
                 throw new AppException($"Course not found with '{courseName}'", (int)HttpStatusCode.NotFound);
             }
             try
             {
-                var transaction = await _context.Database.BeginTransactionAsync();
                 MemoryStream memoryStream = new MemoryStream();
                 await file.CopyToAsync(memoryStream);
                 ExcelPackage excelPackage = new ExcelPackage(memoryStream);
@@ -217,15 +216,18 @@ namespace api.Repositories
                     User? existingUser = await userManager.Users.FirstOrDefaultAsync(user => user.UserName.Equals(username));
                     if (existingUser == null)
                     {
-                        await transaction.RollbackAsync();
                         throw new AppException($"User not found with '{username}'", (int)HttpStatusCode.NotFound);
                     }
+                    bool isEnrolled = existingCourse.CourseUser.Any(courseUser => courseUser.UserId.Equals(existingUser.Id));
+                    if (!isEnrolled) {
+                        throw new AppException($"User not found in course '{courseName}'", (int)HttpStatusCode.NotFound);
+                    }
+
                     Score? existingScore = await _context.Scores.FirstOrDefaultAsync(score => score.UserId.Equals(existingUser.Id) && score.CourseId.Equals(existingCourse.Id));
                     if (existingScore != null)
                     {
                         // Score is existed, updaate value of score
                         existingScore.Value = value;
-                        await _context.SaveChangesAsync();
                         scores.Add(existingScore);
                     }
                     else
@@ -239,12 +241,11 @@ namespace api.Repositories
                             Value = value
                         };
                         await _context.Scores.AddAsync(score);
-                        await _context.SaveChangesAsync();
                         scores.Add(score);
                     }
 
                 }
-                await transaction.CommitAsync();
+                await _context.SaveChangesAsync();
                 return scores;
 
             }
@@ -257,6 +258,11 @@ namespace api.Repositories
 
         public async Task<byte[]> ExportScoresToExcelAsync(string courseName)
         {
+            Course? course = await _context.Courses.FirstOrDefaultAsync(course => course.Name.ToLower().Equals(courseName.ToLower()));
+            if (course == null)
+            {
+                throw new AppException($"Course not found with '{courseName}'", (int)HttpStatusCode.NotFound);
+            }
             List<Score> scores = await _context.Scores
                 .Include(score => score.Course)
                 .Include(score => score.User)
@@ -265,9 +271,93 @@ namespace api.Repositories
             var worksheet = excelPackage.Workbook.Worksheets.Add("Scores");
             worksheet.Cells[1, 1].Value = "UserName";
             worksheet.Cells[1, 2].Value = "Value";
-            for (int i = 0; i < scores.Count; ++i) {
-                worksheet.Cells[i+2,1].Value = scores[i].User.UserName;
-                worksheet.Cells[i+2,2].Value = scores[i].Value;
+            for (int i = 0; i < scores.Count; ++i)
+            {
+                worksheet.Cells[i + 2, 1].Value = scores[i].User.UserName;
+                worksheet.Cells[i + 2, 2].Value = scores[i].Value;
+            }
+            return await excelPackage.GetAsByteArrayAsync();
+        }
+
+        public async Task<List<CourseUser>> ImportCourseUserFromExcelAsync(string courseName, IFormFile file)
+        {
+            Course? existingCourse = await _context.Courses.Include(course => course.CourseUser).FirstOrDefaultAsync(course => course.Name.Equals(courseName));
+            if (existingCourse == null)
+            {
+                throw new AppException($"Course not found with '{courseName}'", (int)HttpStatusCode.NotFound);
+            }
+            try
+            {
+                MemoryStream memoryStream = new MemoryStream();
+                await file.CopyToAsync(memoryStream);
+                ExcelPackage excelPackage = new ExcelPackage(memoryStream);
+                var worksheet = excelPackage.Workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null)
+                {
+                    throw new AppException("No worksheet found in the uploaded Excel file.", (int)HttpStatusCode.BadRequest);
+                }
+                List<CourseUser> courseUserList = existingCourse.CourseUser;
+                List<CourseUser> result = new List<CourseUser>();
+                int row = worksheet.Dimension.Rows;
+                if (row - 1 > existingCourse.MaxNumberOfStudents - courseUserList.Count) {
+                    throw new AppException($"Quantity exceeded MaxNumberOfStudents of '{courseName}'", (int)HttpStatusCode.BadRequest);
+                }
+                for (int i = 2; i <= row; ++i)
+                {
+                    string? username = worksheet.Cells[i, 1].Value?.ToString();
+                    if (string.IsNullOrWhiteSpace(username)) continue;
+                    User? existingUser = await userManager.Users.FirstOrDefaultAsync(user => user.UserName.Equals(username));
+                    if (existingUser == null)
+                    {
+                        throw new AppException($"User not found with {username}", (int)HttpStatusCode.BadRequest);
+                    }
+                    bool isEnrolled = courseUserList.Any(courseUser => courseUser.UserId.Equals(existingUser.Id));
+                    if (isEnrolled) continue;
+                    CourseUser newCourseUser = new CourseUser {
+                        Course = existingCourse,
+                        User = existingUser,
+                        UserId = existingUser.Id,
+                        CourseId = existingCourse.Id,
+                    };
+                    result.Add(newCourseUser); // For return
+                    courseUserList.Add(newCourseUser); // Add to list CoureUser of Course
+                }
+                await _context.SaveChangesAsync();
+                return result;
+            }
+            catch (Exception e)
+            {
+                throw new AppException(e.InnerException?.Message ?? e.Message, (int)HttpStatusCode.InternalServerError);
+            }
+
+
+        }
+
+        public async Task<byte[]> ExportCourseUserFromExcelAsync(string courseName)
+        {
+            Course? course = await _context.Courses.Include(course => course.CourseUser)
+                .ThenInclude(courseUser => courseUser.User).FirstOrDefaultAsync(course => course.Name.Equals(courseName));
+            if (course == null) {
+                throw new AppException($"Course not found with '{courseName}'", (int)HttpStatusCode.NotFound);
+            }
+            List<User> users = course.CourseUser.Select(courseUser => courseUser.User).ToList();
+            ExcelPackage excelPackage = new ExcelPackage();
+            var worksheet = excelPackage.Workbook.Worksheets.Add("Users");
+            worksheet.Cells[1, 1].Value = "ID";
+            worksheet.Cells[1, 2].Value = "UserName";
+            worksheet.Cells[1, 3].Value = "Email";
+            worksheet.Cells[1, 4].Value = "First Name";
+            worksheet.Cells[1, 5].Value = "Last Name";
+            worksheet.Cells[1, 6].Value = "Roles";
+            for (int i = 0; i < users.Count; i++)
+            {
+                var roles = await userManager.GetRolesAsync(users[i]);
+                worksheet.Cells[i + 2, 1].Value = users[i].Id;
+                worksheet.Cells[i + 2, 2].Value = users[i].UserName;
+                worksheet.Cells[i + 2, 3].Value = users[i].Email;
+                worksheet.Cells[i + 2, 4].Value = users[i].FirstName;
+                worksheet.Cells[i + 2, 5].Value = users[i].LastName;
+                worksheet.Cells[i + 2, 6].Value = roles;
             }
             return await excelPackage.GetAsByteArrayAsync();
         }

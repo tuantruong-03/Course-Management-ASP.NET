@@ -12,8 +12,10 @@ namespace api.Helpers
         {
             return fileHeaders.All(header => requiredHeaders.Contains(header, StringComparer.OrdinalIgnoreCase));
         }
-        private static async Task<bool> ValidateFile(IFormFile file, string extension, string[] requiredHeaders)
+        private static async Task<bool> ValidateFile(IFormFile file, string[] requiredHeaders)
         {
+            string extension = Path.GetExtension(file.FileName).ToLower();
+
             using (var stream = new MemoryStream())
             {
                 await file.CopyToAsync(stream);
@@ -53,16 +55,21 @@ namespace api.Helpers
             }
         }
        
-        public static async Task<bool> ValidateUsersFile(IFormFile file, string extension)
+        public static async Task<bool> ValidateUsersFile(IFormFile file)
         {
             var requiredHeaders = new[] { "UserName", "Email", "First Name", "Last Name", "Roles" };
-            return await ValidateFile(file, extension, requiredHeaders);
+            return await ValidateFile(file, requiredHeaders);
            
         }
-        public static async Task<bool> ValidateScoresFile(IFormFile file, string extension)
+        public static async Task<bool> ValidateScoresFile(IFormFile file)
         {
             var requiredHeaders = new[] { "UserName", "Value" };
-            return await ValidateFile(file, extension, requiredHeaders);
+            return await ValidateFile(file, requiredHeaders);
+        }
+
+        public static async Task<bool> ValidateCourseUsersFile(IFormFile file) {
+            var requiredHeaders = new[] { "UserName" };
+            return await ValidateFile(file, requiredHeaders);
         }
 
     }

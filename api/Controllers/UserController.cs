@@ -15,7 +15,7 @@ namespace api.Controllers
 {
     [Route("api/v1/users")]
     [ApiController]
-    [Authorize]
+    // [Authorize]
     public class UserController : ControllerBase
     {
         private readonly IUserRepository userRepository;
@@ -45,9 +45,8 @@ namespace api.Controllers
         [ValidateExcelFile("file")] // "file" is the parameter name
         public async Task<IActionResult> ImportFromExcel(IFormFile file)
         {
-            string extension = Path.GetExtension(file.FileName).ToLower();
             // Read the header and validate it
-            var isHeaderValid = await ExcelValidator.ValidateUsersFile(file, extension);
+            var isHeaderValid = await ExcelValidator.ValidateUsersFile(file);
             if (!isHeaderValid)
             {
                 return BadRequest("Invalid file header. The file must contain 'Name', 'Email', 'First Name', 'Last Name', and 'Roles' columns.");
